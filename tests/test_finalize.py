@@ -125,3 +125,47 @@ def test_finalize_leaves_source_and_staging_in_place_on_write_failure(tmp_path, 
     assert source.exists()
     assert staging_path.exists()
     assert resolutions_path.exists()
+
+
+def test_finalize_leaves_source_and_staging_in_place_on_enrollment_failure(tmp_path, monkeypatch):
+    monkeypatch.setenv("MEETINGS_DIR", str(tmp_path / "meetings"))
+    paths = config.get_paths()
+    config.ensure_directories(paths)
+
+    source, staging_path, resolutions_path = _write_staging_and_resolutions(
+        tmp_path, {"SPEAKER_01": {"name": "Bob", "enroll": True}}
+    )
+    staging = json.loads(staging_path.read_text())
+    staging["source_path"] = str(source)
+    staging_path.write_text(json.dumps(staging))
+
+    def boom(*args, **kwargs):
+        raise RuntimeError("disk full")
+
+    monkeypatch.setattr(voiceprints, "save_voiceprint", boom)
+
+    with pytest.raises(RuntimeError):
+        finalize.finalize(staging_path, resolutions_path, paths)
+
+    assert source.exists()
+    assert staging_path.exists()
+    assert resolutions_path.exists()
+
+
+def test_finalize_uses_name_but_does_not_enroll_when_enroll_is_false(tmp_path, monkeypatch):
+    monkeypatch.setenv("MEETINGS_DIR", str(tmp_path / "meetings"))
+    paths = config.get_paths()
+    config.ensure_directories(paths)
+
+    source, staging_path, resolutions_path = _write_staging_and_resolutions(
+        tmp_path, {"SPEAKER_01": {"name": "Bob", "enroll": False}}
+    )
+    staging = json.loads(staging_path.read_text())
+    staging["source_path"] = str(source)
+    staging_path.write_text(json.dumps(staging))
+
+    _, txt_path = finalize.finalize(staging_path, resolutions_path, paths)
+
+    assert "Bob: Hello" in txt_path.read_text()
+    db = voiceprints.load_voiceprints(paths.voiceprints_path)
+    assert "Bob" not in db
