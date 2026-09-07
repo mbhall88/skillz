@@ -35,7 +35,7 @@ def run_pipeline(source_path: Path, paths: config.Paths, hf_token: str, title: s
 
     diarize_model = whisperx.diarize.DiarizationPipeline(token=hf_token, device=DEVICE)
     diarize_segments = diarize_model(str(wav_path))
-    result = whisperx.assign_word_speakers(diarize_segments, aligned)
+    result = whisperx.assign_word_speakers(diarize_segments, aligned, fill_nearest=True)
 
     words = [
         {
