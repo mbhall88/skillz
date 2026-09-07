@@ -32,3 +32,12 @@ a tuned value. Calibrate it against your own real recordings before trusting
 automatic matches blindly; watch for both false matches (wrong name applied
 confidently) and false non-matches (a known voice needlessly triggering the
 disambiguation questions).
+
+## Skill installation
+
+This project is symlinked into `~/.claude/skills/meeting-transcribe` so
+Claude Code picks it up automatically:
+
+```bash
+ln -s ~/Projects/skillz/meeting-transcribe ~/.claude/skills/meeting-transcribe
+```
