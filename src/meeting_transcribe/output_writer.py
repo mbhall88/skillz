@@ -10,8 +10,14 @@ def merge_words_into_turns(
     for word in words:
         label = speaker_labels.get(word["speaker"], word["speaker"])
         if turns and turns[-1]["speaker"] == label:
-            turns[-1]["end"] = word["end"]
-            turns[-1]["text"] += f" {word['word']}"
+            # Create new turn dict instead of mutating
+            last_turn = turns[-1]
+            turns[-1] = {
+                "start": last_turn["start"],
+                "end": word["end"],
+                "speaker": label,
+                "text": f"{last_turn['text']} {word['word']}",
+            }
         else:
             turns.append(
                 {
@@ -28,8 +34,14 @@ def merge_cues_into_turns(cues: list[dict]) -> list[dict]:
     turns: list[dict] = []
     for cue in cues:
         if turns and turns[-1]["speaker"] == cue["speaker"]:
-            turns[-1]["end"] = cue["end"]
-            turns[-1]["text"] += f" {cue['text']}"
+            # Create new turn dict instead of mutating
+            last_turn = turns[-1]
+            turns[-1] = {
+                "start": last_turn["start"],
+                "end": cue["end"],
+                "speaker": cue["speaker"],
+                "text": f"{last_turn['text']} {cue['text']}",
+            }
         else:
             turns.append(dict(cue))
     return turns
