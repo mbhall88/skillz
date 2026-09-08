@@ -9,6 +9,10 @@ Turns recordings dropped in `~/Documents/meetings/inbox/` (or `$MEETINGS_DIR/inb
 if set) into labelled transcripts in `output/`. Manual trigger only — nothing
 runs automatically.
 
+Every `uv run` command below must be run from this skill's own directory
+(the base directory shown when this skill loads) — not from the current
+project or working directory.
+
 ## Setup check (audio and enrollment only)
 
 VTT import needs neither `HF_TOKEN` nor Hugging Face model access. For the
@@ -39,8 +43,8 @@ Continue processing VTT files.
    ```
    If it prints `True`, ask the user for a short meeting title first and pass
    it as `--title "..."`.
-3. From `~/Projects/skillz/meeting-transcribe`, dispatch by extension and
-   handle **one file fully** before moving to the next:
+3. Dispatch by extension and handle **one file fully** before moving to
+   the next:
    - `.m4a` → the **Audio pipeline** below, after its setup check.
    - `.vtt` → run `uv run python -m meeting_transcribe.vtt_import <absolute-path> [--title "..."]`.
      Report the two output paths it prints. VTT uses Zoom's labels directly.
@@ -48,8 +52,6 @@ Continue processing VTT files.
    file rather than stopping the whole batch.
 
 ## Audio pipeline (`.m4a`)
-
-From `~/Projects/skillz/meeting-transcribe`:
 
 1. Run `uv run python -m meeting_transcribe.pipeline <path-to-m4a> [--title "..."]`.
    This prints an **absolute staging path** under `$MEETINGS_DIR/.staging/`

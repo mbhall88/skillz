@@ -93,9 +93,16 @@ disambiguation questions).
 
 ## Skill installation
 
-This project is symlinked into `~/.claude/skills/meeting-transcribe` so
-Claude Code picks it up automatically:
+Easiest: use the [`skills` CLI](https://skills.sh), which works with Claude
+Code, Codex, and most other agents:
 
 ```bash
-ln -s ~/Projects/skillz/meeting-transcribe ~/.claude/skills/meeting-transcribe
+npx skills@latest add <owner>/meeting-transcribe
+```
+
+Or symlink it manually into whichever agent's skills directory you use, e.g.
+for Claude Code:
+
+```bash
+ln -s /path/to/meeting-transcribe ~/.claude/skills/meeting-transcribe
 ```
