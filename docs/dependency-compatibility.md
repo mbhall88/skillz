@@ -32,3 +32,29 @@ Offline contract tests replace the external model classes and check the
 constructor arguments and separate crop spans. Gated downloads, checkpoint
 deserialization, real inference, and match-threshold calibration have not
 been verified in this fix wave, as requested.
+
+## Findings from the first live end-to-end run (2026-09-08)
+
+A real 24-minute `.m4a` recording surfaced two defects the offline contract
+tests could not catch, since both only manifest with real model execution:
+
+- **Language auto-detection is unreliable.** WhisperX detects language from
+  only the first 30s of audio; on this recording it picked Norwegian
+  Nynorsk (`nn`, 0.74 confidence) for what is entirely English speech,
+  producing a fully garbled transcript (e.g. "Hei, Michael. Hvordan går
+  det?" for "Hi, Michael. How are you?") with near-zero alignment
+  confidence scores throughout. Fixed by forcing `language=` on
+  `model.transcribe()` via a new `config.get_language()` (default `"en"`,
+  overridable with `MEETING_LANGUAGE`) rather than relying on auto-detect.
+- **Embedding extraction fails for every speaker in this environment.**
+  `Inference.crop()` on a bare file path requires torchcodec, which fails
+  to load here (`Library not loaded: @rpath/libavutil.*.dylib` — the
+  installed `torchcodec` build doesn't match the installed ffmpeg dylibs).
+  Every speaker's `centroid_for_segments` call raised
+  `RuntimeError: torchcodec is not available...`, so no voiceprint could
+  be computed at all — the enrollment/matching feature was completely
+  non-functional. Per `pyannote/audio/core/io.py`'s own `Audio.crop`, a
+  preloaded `{"waveform": tensor, "sample_rate": int}` dict skips the
+  torchcodec path entirely. Fixed in `embedding_extraction.py` by loading
+  the wav once via `torchaudio.load()` (cached per audio path) and passing
+  that dict to `inference.crop()` instead of the file path.

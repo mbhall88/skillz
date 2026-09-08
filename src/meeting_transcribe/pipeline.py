@@ -58,7 +58,7 @@ def run_pipeline(source_path: Path, paths: config.Paths, hf_token: str, title: s
 
     model = whisperx.load_model(WHISPER_MODEL, DEVICE, compute_type=COMPUTE_TYPE)
     audio = whisperx.load_audio(str(wav_path))
-    transcription = model.transcribe(audio)
+    transcription = model.transcribe(audio, language=config.get_language())
 
     align_model, align_metadata = whisperx.load_align_model(
         language_code=transcription["language"], device=DEVICE

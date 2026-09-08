@@ -4,6 +4,7 @@ from pathlib import Path
 
 DEFAULT_MEETINGS_DIR = Path.home() / "Documents" / "meetings"
 DEFAULT_MATCH_THRESHOLD = 0.75
+DEFAULT_LANGUAGE = "en"
 HF_TOKEN_ENV_VAR = "HF_TOKEN"
 
 
@@ -32,6 +33,10 @@ def get_paths() -> Paths:
 
 def get_match_threshold() -> float:
     return float(os.environ.get("MEETING_MATCH_THRESHOLD", str(DEFAULT_MATCH_THRESHOLD)))
+
+
+def get_language() -> str:
+    return os.environ.get("MEETING_LANGUAGE", DEFAULT_LANGUAGE)
 
 
 def ensure_directories(paths: Paths) -> None:

@@ -29,11 +29,58 @@ def test_embedder_loads_model_before_constructing_inference(monkeypatch):
 
     def inference(model, *, window):
         assert model is loaded_model and window == "whole"
-        return SimpleNamespace(crop=lambda path, span: SimpleNamespace(tolist=lambda: [1.0, 0.0]))
+        return SimpleNamespace(crop=lambda file, span: SimpleNamespace(tolist=lambda: [1.0, 0.0]))
 
     monkeypatch.setitem(sys.modules, "pyannote.audio", SimpleNamespace(
         Model=SimpleNamespace(from_pretrained=from_pretrained), Inference=inference,
     ))
     monkeypatch.setitem(sys.modules, "pyannote.core", SimpleNamespace(Segment=lambda start, end: (start, end)))
+    monkeypatch.setitem(sys.modules, "torchaudio", SimpleNamespace(
+        load=lambda path: (object(), 16000),
+    ))
     embed = embedding_extraction.load_pyannote_embedder("synthetic-token")
     assert embed(Path("synthetic.wav"), 0.0, 1.0) == [1.0, 0.0]
+
+
+def test_embed_passes_preloaded_waveform_not_a_bare_path(monkeypatch):
+    # pyannote's Inference.crop() requires torchcodec to decode a bare file
+    # path, and torchcodec can be unavailable (missing/mismatched ffmpeg
+    # libs). Passing a preloaded {"waveform", "sample_rate"} dict avoids
+    # that dependency entirely.
+    sentinel_waveform = object()
+    crop_calls = []
+
+    def inference(model, *, window):
+        return SimpleNamespace(crop=lambda file, span: crop_calls.append(file) or SimpleNamespace(tolist=lambda: [0.0]))
+
+    monkeypatch.setitem(sys.modules, "pyannote.audio", SimpleNamespace(
+        Model=SimpleNamespace(from_pretrained=lambda *a, **k: object()), Inference=inference,
+    ))
+    monkeypatch.setitem(sys.modules, "pyannote.core", SimpleNamespace(Segment=lambda start, end: (start, end)))
+    monkeypatch.setitem(sys.modules, "torchaudio", SimpleNamespace(
+        load=lambda path: (sentinel_waveform, 16000),
+    ))
+    embed = embedding_extraction.load_pyannote_embedder("synthetic-token")
+    embed(Path("synthetic.wav"), 0.0, 1.0)
+    assert crop_calls == [{"waveform": sentinel_waveform, "sample_rate": 16000}]
+
+
+def test_embed_loads_waveform_once_per_audio_path(monkeypatch):
+    load_calls = []
+
+    def fake_load(path):
+        load_calls.append(path)
+        return (object(), 16000)
+
+    monkeypatch.setitem(sys.modules, "pyannote.audio", SimpleNamespace(
+        Model=SimpleNamespace(from_pretrained=lambda *a, **k: object()),
+        Inference=lambda model, *, window: SimpleNamespace(
+            crop=lambda file, span: SimpleNamespace(tolist=lambda: [0.0])
+        ),
+    ))
+    monkeypatch.setitem(sys.modules, "pyannote.core", SimpleNamespace(Segment=lambda start, end: (start, end)))
+    monkeypatch.setitem(sys.modules, "torchaudio", SimpleNamespace(load=fake_load))
+    embed = embedding_extraction.load_pyannote_embedder("synthetic-token")
+    embed(Path("synthetic.wav"), 0.0, 1.0)
+    embed(Path("synthetic.wav"), 1.0, 2.0)
+    assert load_calls == ["synthetic.wav"]

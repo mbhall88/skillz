@@ -17,8 +17,12 @@ without re-running the ML pipeline.
 3. For audio/enrollment, `export HF_TOKEN=<your HuggingFace access token>`.
    Direct enrollment needs only the embedding model. VTT import needs no
    token or model access.
-4. Optionally set `MEETINGS_DIR` (default `~/Documents/meetings`) and
-   `MEETING_MATCH_THRESHOLD` (default `0.75`).
+4. Optionally set `MEETINGS_DIR` (default `~/Documents/meetings`),
+   `MEETING_MATCH_THRESHOLD` (default `0.75`), and `MEETING_LANGUAGE`
+   (default `en` — WhisperX's language auto-detection uses only the first
+   30s of audio and has been observed to mis-detect English speech as a
+   different language entirely, garbling the transcript; set this only if
+   your recordings are consistently in another language).
 
 The pipeline explicitly uses `pyannote/speaker-diarization-3.1`. Embedding
 inference loads a `Model` first, as required by the locked API. See

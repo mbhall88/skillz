@@ -1,3 +1,4 @@
+from functools import lru_cache
 from pathlib import Path
 from typing import Callable
 
@@ -15,10 +16,22 @@ def load_pyannote_embedder(hf_token: str) -> EmbedFn:
     model = Model.from_pretrained("pyannote/embedding", token=hf_token)
     inference = Inference(model, window="whole")
 
+    @lru_cache(maxsize=4)
+    def load_waveform(audio_path_str: str):
+        import torchaudio
+
+        return torchaudio.load(audio_path_str)
+
     def embed(audio_path: Path, start: float, end: float) -> list[float]:
         from pyannote.core import Segment
 
-        embedding = inference.crop(str(audio_path), Segment(start, end))
+        # Pass a preloaded waveform rather than a file path: pyannote's
+        # crop() otherwise requires torchcodec, which is unavailable in
+        # this environment (see docs/dependency-compatibility.md).
+        waveform, sample_rate = load_waveform(str(audio_path))
+        embedding = inference.crop(
+            {"waveform": waveform, "sample_rate": sample_rate}, Segment(start, end)
+        )
         return embedding.tolist()
 
     return embed

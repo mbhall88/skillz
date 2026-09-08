@@ -29,6 +29,16 @@ def test_get_match_threshold_honours_env_var(monkeypatch):
     assert config.get_match_threshold() == 0.6
 
 
+def test_get_language_defaults_to_english(monkeypatch):
+    monkeypatch.delenv("MEETING_LANGUAGE", raising=False)
+    assert config.get_language() == "en"
+
+
+def test_get_language_honours_env_var(monkeypatch):
+    monkeypatch.setenv("MEETING_LANGUAGE", "no")
+    assert config.get_language() == "no"
+
+
 def test_ensure_directories_creates_all_four(tmp_path, monkeypatch):
     monkeypatch.setenv("MEETINGS_DIR", str(tmp_path / "meetings"))
     paths = config.get_paths()

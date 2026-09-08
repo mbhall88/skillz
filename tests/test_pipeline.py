@@ -33,9 +33,13 @@ def run_synthetic_pipeline(tmp_path, monkeypatch):
         factory = Mock(return_value=lambda audio: frame)
         diarize.DiarizationPipeline = factory
         backend.diarize = diarize
-        backend.load_model = Mock(return_value=SimpleNamespace(
-            transcribe=lambda audio: {"language": "en", "segments": deepcopy(original)},
-        ))
+        transcribe_kwargs = {}
+
+        def transcribe(audio, **kwargs):
+            transcribe_kwargs.update(kwargs)
+            return {"language": "en", "segments": deepcopy(original)}
+
+        backend.load_model = Mock(return_value=SimpleNamespace(transcribe=Mock(side_effect=transcribe)))
         backend.load_audio = lambda path: np.zeros(160000, dtype=np.float32)
         backend.load_align_model = lambda **kwargs: (object(), {})
         backend.align = lambda *args: {"segments": deepcopy(segments)}
@@ -50,6 +54,9 @@ def run_synthetic_pipeline(tmp_path, monkeypatch):
             Inference=lambda *args, **kwargs: SimpleNamespace(crop=crop),
         ))
         monkeypatch.setitem(sys.modules, "pyannote.core", SimpleNamespace(Segment=lambda a, b: (a, b)))
+        monkeypatch.setitem(sys.modules, "torchaudio", SimpleNamespace(
+            load=lambda path: (np.zeros((1, 160000), dtype=np.float32), 16000),
+        ))
         pipeline = importlib.import_module("meeting_transcribe.pipeline")
         if hasattr(pipeline, "whisperx"):
             monkeypatch.setattr(pipeline, "whisperx", backend)
@@ -57,6 +64,7 @@ def run_synthetic_pipeline(tmp_path, monkeypatch):
         return SimpleNamespace(
             staging=json.loads(path.read_text()), staging_path=path, source=source,
             paths=paths, crop=crop, diarization_factory=factory, backend=backend,
+            transcribe_kwargs=transcribe_kwargs,
         )
 
     return run
@@ -93,6 +101,21 @@ def test_pipeline_uses_five_longest_separate_diarization_spans(run_synthetic_pip
     assert [call.args[1] for call in result.crop.call_args_list] == [
         (1, 1.9), (4, 4.8), (6, 6.7), (8, 8.6), (3, 3.3),
     ]
+
+
+def test_pipeline_forces_configured_language_instead_of_autodetecting(run_synthetic_pipeline, monkeypatch):
+    # Auto-detection previously mis-identified real English speech as
+    # Norwegian from the first 30s of audio, garbling the whole transcript.
+    monkeypatch.setenv("MEETING_LANGUAGE", "en")
+    result = run_synthetic_pipeline([{"start": 0, "end": 1, "text": "Hi", "words": []}])
+    result.backend.load_model.return_value.transcribe.assert_called_once()
+    assert result.transcribe_kwargs["language"] == "en"
+
+
+def test_pipeline_honours_meeting_language_override(run_synthetic_pipeline, monkeypatch):
+    monkeypatch.setenv("MEETING_LANGUAGE", "fr")
+    result = run_synthetic_pipeline([{"start": 0, "end": 1, "text": "Bonjour", "words": []}])
+    assert result.transcribe_kwargs["language"] == "fr"
 
 
 def test_pipeline_explicitly_selects_approved_diarization_model(run_synthetic_pipeline):
