@@ -18,16 +18,20 @@ def load_pyannote_embedder(hf_token: str) -> EmbedFn:
 
     @lru_cache(maxsize=4)
     def load_waveform(audio_path_str: str):
-        import torchaudio
+        import soundfile
+        import torch
 
-        return torchaudio.load(audio_path_str)
+        data, sample_rate = soundfile.read(audio_path_str, dtype="float32", always_2d=True)
+        return torch.from_numpy(data.T), sample_rate
 
     def embed(audio_path: Path, start: float, end: float) -> list[float]:
         from pyannote.core import Segment
 
         # Pass a preloaded waveform rather than a file path: pyannote's
         # crop() otherwise requires torchcodec, which is unavailable in
-        # this environment (see docs/dependency-compatibility.md).
+        # this environment (see docs/dependency-compatibility.md). soundfile
+        # is used instead of torchaudio.load() because torchaudio has no
+        # working backend here either (no torchcodec, no soundfile backend).
         waveform, sample_rate = load_waveform(str(audio_path))
         embedding = inference.crop(
             {"waveform": waveform, "sample_rate": sample_rate}, Segment(start, end)

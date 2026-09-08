@@ -10,6 +10,7 @@ dependencies = [
     "torchaudio",
     "numpy",
     "webvtt-py>=0.5",
+    "soundfile>=0.14.0",
 ]
 
 [dependency-groups]

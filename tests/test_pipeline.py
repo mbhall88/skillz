@@ -54,8 +54,8 @@ def run_synthetic_pipeline(tmp_path, monkeypatch):
             Inference=lambda *args, **kwargs: SimpleNamespace(crop=crop),
         ))
         monkeypatch.setitem(sys.modules, "pyannote.core", SimpleNamespace(Segment=lambda a, b: (a, b)))
-        monkeypatch.setitem(sys.modules, "torchaudio", SimpleNamespace(
-            load=lambda path: (np.zeros((1, 160000), dtype=np.float32), 16000),
+        monkeypatch.setitem(sys.modules, "soundfile", SimpleNamespace(
+            read=lambda path, dtype=None, always_2d=None: (np.zeros((160000, 1), dtype=np.float32), 16000),
         ))
         pipeline = importlib.import_module("meeting_transcribe.pipeline")
         if hasattr(pipeline, "whisperx"):
