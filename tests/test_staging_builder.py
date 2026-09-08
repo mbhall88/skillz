@@ -1,3 +1,5 @@
+import pytest
+
 from meeting_transcribe import staging_builder
 
 
@@ -23,6 +25,14 @@ def test_guess_name_from_text_matches_this_is_x():
 
 def test_guess_name_from_text_returns_none_when_no_cue():
     assert staging_builder.guess_name_from_text("I think the budget looks fine") is None
+
+
+@pytest.mark.parametrize("text", [
+    "It's important to finish", "This is the budget", "it's fine here",
+    "this is working", "It's September already", "This is Budget Review",
+])
+def test_name_guesses_ignore_ordinary_words(text):
+    assert staging_builder.guess_name_from_text(text) is None
 
 
 def test_longest_turns_for_speaker_sorts_by_duration_desc():
@@ -86,3 +96,21 @@ def test_build_staging_empty_voiceprint_db_marks_everyone_unmatched():
     )
     assert result["speakers"]["SPEAKER_00"]["status"] == "unmatched"
     assert result["speakers"]["SPEAKER_00"]["best_guess"] == "Bob"
+
+
+def test_staging_owns_word_records_and_embedding_lists():
+    words = _words()
+    embeddings = {"SPEAKER_00": [1.0, 0.0]}
+    staged = staging_builder.build_staging("r", "/tmp/r.m4a", "today", 6, words, embeddings, {}, 0.75)
+    assert staged["words"] == words
+    assert all(actual is not original for actual, original in zip(staged["words"], words))
+    assert staged["speakers"]["SPEAKER_00"]["centroid_embedding"] is not embeddings["SPEAKER_00"]
+
+
+def test_staging_includes_speakers_without_embeddings_for_naming():
+    words = [{"start": 0, "end": 1, "word": "Hello", "speaker": "SPEAKER_UNKNOWN"}]
+    staged = staging_builder.build_staging("r", "/tmp/r.m4a", "today", 6, words, {}, {}, 0.75)
+    assert staged["speakers"]["SPEAKER_UNKNOWN"] == {
+        "status": "unmatched", "best_guess": None, "score": 0.0, "centroid_embedding": None,
+        "snippets": [{"start": 0, "end": 1, "text": "Hello"}],
+    }

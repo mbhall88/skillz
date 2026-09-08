@@ -1,4 +1,7 @@
 from pathlib import Path
+import json
+
+import pytest
 
 from meeting_transcribe import config, vtt_import
 
@@ -51,3 +54,59 @@ def test_import_vtt_writes_output_and_deletes_source(tmp_path, monkeypatch):
     assert txt_path.exists()
     assert not source.exists()
     assert "Alice: Hello there how are you" in txt_path.read_text()
+
+
+def test_vtt_output_keeps_original_cues_with_fractional_times(tmp_path, monkeypatch):
+    monkeypatch.setenv("MEETINGS_DIR", str(tmp_path))
+    paths = config.get_paths()
+    config.ensure_directories(paths)
+    source = paths.inbox_dir / "meeting.vtt"
+    source.write_text(_SAMPLE_VTT.replace("00:00:02.500", "01:02:02.123").replace("00:00:04.000", "01:02:04.987"))
+    original_cues = vtt_import.parse_vtt(source)
+    json_path, txt_path = vtt_import.import_vtt(source, paths)
+    output = json.loads(json_path.read_text())
+    assert output["cues"] == original_cues
+    assert output["cues"][1]["start"] == 3722.123
+    assert output["cues"][1]["end"] == 3724.987
+    assert len(output["turns"]) == 2
+    assert "Alice: Hello there how are you" in txt_path.read_text()
+
+
+@pytest.mark.parametrize("unsafe", ["outside", "symlink", "extension"])
+def test_vtt_rejects_unsafe_source_before_writing(tmp_path, monkeypatch, unsafe):
+    monkeypatch.setenv("MEETINGS_DIR", str(tmp_path / "meetings"))
+    paths = config.get_paths()
+    paths.inbox_dir.mkdir(parents=True)
+    outside = tmp_path / "outside.vtt"
+    outside.write_text(_SAMPLE_VTT)
+    if unsafe == "outside":
+        source = outside
+    elif unsafe == "extension":
+        source = paths.inbox_dir / "wrong.txt"
+        source.write_text(_SAMPLE_VTT)
+    else:
+        source = paths.inbox_dir / "linked.vtt"
+        source.symlink_to(outside)
+    with pytest.raises(ValueError, match="[Ss]ource"):
+        vtt_import.import_vtt(source, paths)
+    assert source.exists() and outside.exists()
+    assert not paths.output_dir.exists()
+
+
+def test_vtt_rechecks_source_after_output_before_deletion(tmp_path, monkeypatch):
+    monkeypatch.setenv("MEETINGS_DIR", str(tmp_path))
+    paths = config.get_paths()
+    config.ensure_directories(paths)
+    source = paths.inbox_dir / "meeting.vtt"
+    source.write_text(_SAMPLE_VTT)
+    writer = vtt_import.write_output_files
+
+    def replace_during_write(*args, **kwargs):
+        result = writer(*args, **kwargs)
+        source.write_text("new transcript")
+        return result
+
+    monkeypatch.setattr(vtt_import, "write_output_files", replace_during_write)
+    with pytest.raises(ValueError, match="[Ss]ource"):
+        vtt_import.import_vtt(source, paths)
+    assert source.read_text() == "new transcript"

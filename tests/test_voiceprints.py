@@ -1,5 +1,8 @@
 import json
 import math
+import os
+
+import pytest
 
 from meeting_transcribe import voiceprints
 
@@ -62,3 +65,36 @@ def test_match_speaker_empty_db_returns_none():
     name, score = voiceprints.match_speaker([1.0, 0.0], {}, threshold=0.75)
     assert name is None
     assert score == 0.0
+
+
+def test_failed_atomic_replace_preserves_existing_voiceprints(tmp_path, monkeypatch):
+    path = tmp_path / "voiceprints.json"
+    voiceprints.save_voiceprint(path, "Alice", [1.0, 0.0], source="enroll")
+    before = path.read_bytes()
+
+    def fail_replace(source, destination):
+        assert source.parent == path.parent
+        assert json.loads(source.read_text())["Bob"]["embedding"] == [0.0, 1.0]
+        assert path.read_bytes() == before
+        raise OSError("simulated replacement failure")
+
+    monkeypatch.setattr(os, "replace", fail_replace)
+    with pytest.raises(OSError, match="replacement failure"):
+        voiceprints.save_voiceprint(path, "Bob", [0.0, 1.0], source="session")
+    assert path.read_bytes() == before
+    assert list(tmp_path.iterdir()) == [path]
+
+
+def test_failed_voiceprint_flush_preserves_database(tmp_path, monkeypatch):
+    path = tmp_path / "voiceprints.json"
+    voiceprints.save_voiceprint(path, "Alice", [1.0, 0.0], source="enroll")
+    before = path.read_bytes()
+
+    def fail_flush(fd):
+        raise OSError("disk full")
+
+    monkeypatch.setattr(os, "fsync", fail_flush)
+    with pytest.raises(OSError, match="disk full"):
+        voiceprints.save_voiceprint(path, "Bob", [0.0, 1.0], source="session")
+    assert path.read_bytes() == before
+    assert list(tmp_path.iterdir()) == [path]

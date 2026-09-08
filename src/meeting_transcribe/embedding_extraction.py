@@ -8,11 +8,12 @@ EmbedFn = Callable[[Path, float, float], list[float]]
 
 def load_pyannote_embedder(hf_token: str) -> EmbedFn:
     """Loads pyannote/embedding and returns a callable that embeds one
-    (start, end) span of an audio file. Not unit tested — requires the real
-    gated model; verify manually per the README setup steps."""
-    from pyannote.audio import Inference
+    (start, end) span of an audio file. The API contract is tested offline;
+    real model execution requires the gated model."""
+    from pyannote.audio import Inference, Model
 
-    inference = Inference("pyannote/embedding", window="whole", use_auth_token=hf_token)
+    model = Model.from_pretrained("pyannote/embedding", token=hf_token)
+    inference = Inference(model, window="whole")
 
     def embed(audio_path: Path, start: float, end: float) -> list[float]:
         from pyannote.core import Segment

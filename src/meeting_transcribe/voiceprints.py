@@ -1,8 +1,20 @@
 import json
+import math
+import os
+import tempfile
 from datetime import datetime, timezone
 from pathlib import Path
 
 import numpy as np
+
+
+def is_usable_embedding(embedding: object) -> bool:
+    return (
+        isinstance(embedding, list)
+        and bool(embedding)
+        and all(type(value) in (int, float) and math.isfinite(value) for value in embedding)
+        and any(value != 0 for value in embedding)
+    )
 
 
 def compute_centroid(embeddings: list[list[float]]) -> list[float]:
@@ -33,13 +45,26 @@ def save_voiceprint(path: Path, name: str, embedding: list[float], source: str) 
     new_db = {
         **db,
         name: {
-            "embedding": embedding,
+            "embedding": list(embedding),
             "updated_at": datetime.now(timezone.utc).isoformat(),
             "source": source,
         },
     }
+    serialized = json.dumps(new_db, indent=2, allow_nan=False)
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps(new_db, indent=2))
+    with tempfile.NamedTemporaryFile(dir=path.parent, prefix=f".{path.name}.", delete=False) as stream:
+        temporary = Path(stream.name)
+        try:
+            stream.write(serialized.encode("utf-8"))
+            stream.flush()
+            os.fsync(stream.fileno())
+        except BaseException:
+            temporary.unlink(missing_ok=True)
+            raise
+    try:
+        os.replace(temporary, path)
+    finally:
+        temporary.unlink(missing_ok=True)
 
 
 def match_speaker(

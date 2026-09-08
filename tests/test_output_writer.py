@@ -1,6 +1,8 @@
 import json
 from pathlib import Path
 
+import pytest
+
 from meeting_transcribe import output_writer
 
 
@@ -72,3 +74,26 @@ def test_write_output_files_includes_words_when_given(tmp_path):
     )
     data = json.loads(json_path.read_text())
     assert data["words"] == words
+
+
+@pytest.mark.parametrize("extensions", [("json",), ("txt",), ("json", "txt")])
+def test_output_collision_preserves_existing_pair(tmp_path, extensions):
+    for extension in extensions:
+        (tmp_path / f"meeting.{extension}").write_text("earlier transcript")
+
+    with pytest.raises(FileExistsError):
+        output_writer.write_output_files(tmp_path, "meeting", [], {})
+
+    assert {p.name: p.read_text() for p in tmp_path.iterdir()} == {
+        f"meeting.{extension}": "earlier transcript" for extension in extensions
+    }
+
+
+def test_merged_turns_retain_full_extent_of_overlapping_fallback_timing():
+    words = [
+        {"start": 0, "end": 5, "speaker": "Unknown", "word": "Unaligned"},
+        {"start": 1, "end": 2, "speaker": "Unknown", "word": "aligned"},
+    ]
+    cues = [{**word, "text": word["word"]} for word in words]
+    assert output_writer.merge_words_into_turns(words)[0]["end"] == 5
+    assert output_writer.merge_cues_into_turns(cues)[0]["end"] == 5
