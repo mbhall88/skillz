@@ -6,7 +6,7 @@ My agent skills, for Claude Code, Codex, and anything else that speaks the
 ## Installation
 
 ```bash
-npx skills@latest add <owner>/skillz
+npx skills@latest add mbhall88/skillz
 ```
 
 Pick which skills you want and which agents to install them to. Or symlink
