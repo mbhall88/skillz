@@ -23,6 +23,10 @@ ln -s /path/to/skillz/skills/<name> ~/.claude/skills/<name>
   voiceprints, and interactively resolves anyone it can't confidently match.
   Also files Zoom `.vtt` exports.
 
+## Changelog
+
+See [CHANGELOG.md](./CHANGELOG.md).
+
 ## License
 
 MIT — see [LICENSE](./LICENSE).
