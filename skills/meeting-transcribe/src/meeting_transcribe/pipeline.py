@@ -1,4 +1,5 @@
 import argparse
+import gc
 import json
 import os
 from copy import deepcopy
@@ -13,7 +14,11 @@ from .staging_builder import build_staging
 
 DEVICE = "cpu"
 COMPUTE_TYPE = "int8"
-WHISPER_MODEL = "large-v3"
+# large-v3-turbo: OpenAI's pruned-decoder large-v3, near-large-v3 accuracy at
+# roughly half the memory. Language is forced (config.get_language()), so
+# large-v3's main edge — low-resource multilingual robustness — isn't in play
+# here anyway. Swap back to "large-v3" if turbo's accuracy proves insufficient.
+WHISPER_MODEL = "large-v3-turbo"
 DIARIZATION_MODEL = "pyannote/speaker-diarization-3.1"
 MAX_EMBEDDING_SPANS = 5
 
@@ -56,19 +61,30 @@ def run_pipeline(source_path: Path, paths: config.Paths, hf_token: str, title: s
     wav_path = paths.staging_dir / f"{source_path.stem}.wav"
     convert_to_wav16k_mono(source_path, wav_path)
 
+    # Everything below runs CPU-only with no swap configured on the target
+    # machine, so each model is freed as soon as its stage is done rather
+    # than staying resident alongside the next one — diarization loading on
+    # top of an undropped Whisper + alignment model is what was OOM-killing
+    # this pipeline in practice.
     model = whisperx.load_model(WHISPER_MODEL, DEVICE, compute_type=COMPUTE_TYPE)
     audio = whisperx.load_audio(str(wav_path))
     transcription = model.transcribe(audio, language=config.get_language())
+    del model
+    gc.collect()
 
     align_model, align_metadata = whisperx.load_align_model(
         language_code=transcription["language"], device=DEVICE
     )
     aligned = whisperx.align(deepcopy(transcription["segments"]), align_model, align_metadata, audio, DEVICE)
+    del align_model, align_metadata
+    gc.collect()
 
     diarize_model = whisperx.diarize.DiarizationPipeline(
         model_name=DIARIZATION_MODEL, token=hf_token, device=DEVICE,
     )
     diarize_segments = diarize_model(str(wav_path))
+    del diarize_model
+    gc.collect()
     result = whisperx.assign_word_speakers(diarize_segments, deepcopy(aligned), fill_nearest=True)
     words = transcript_words(result["segments"])
 
@@ -94,6 +110,8 @@ def run_pipeline(source_path: Path, paths: config.Paths, hf_token: str, title: s
             centroid = None
             embedding_errors = {**embedding_errors, raw_label: str(exc)}
         speaker_embeddings = {**speaker_embeddings, raw_label: centroid}
+    del embed_fn
+    gc.collect()
 
     voiceprint_db = voiceprints.load_voiceprints(paths.voiceprints_path)
     threshold = config.get_match_threshold()
