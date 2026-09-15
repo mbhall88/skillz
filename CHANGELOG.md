@@ -5,6 +5,14 @@ follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Added
+
+- `seqkit` skill: routes sequence-file tasks to the right seqkit subcommand
+  instead of a throwaway script. Intent-phrased routing table across all 39
+  subcommands, plus reference files for traps, recipes, and boundaries.
+  Verified against seqkit v2.13.0.
+- `CONTEXT.md` glossary and `docs/adr/` for architecture decision records.
+
 ## [0.1.0] - 2026-09-08
 
 ### Added
