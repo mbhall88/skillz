@@ -22,6 +22,10 @@ ln -s /path/to/skillz/skills/<name> ~/.claude/skills/<name>
   [seqkit](https://github.com/shenwei356/seqkit) instead of writing a throwaway
   script every time a task touches a FASTA or FASTQ file. Intent-phrased routing
   across all 39 subcommands, plus the traps that silently produce wrong output.
+- [`csvtk`](./skills/csvtk/README.md) — the same idea for
+  [csvtk](https://github.com/shenwei356/csvtk) and CSV/TSV files: routing across
+  all 54 subcommands, plus the silent traps (a TSV read without `-t` reports one
+  column). Companion to `seqkit` — `fx2tab` stops where csvtk starts.
 - [`meeting-transcribe`](./skills/meeting-transcribe/README.md) — transcribes
   and diarizes local meeting recordings, matches speakers against enrolled
   voiceprints, and interactively resolves anyone it can't confidently match.

@@ -16,7 +16,7 @@ script. This file names the alternative; it does not teach it.
 | Variant calling and VCF manipulation | `bcftools` |
 | GFF3 handling — `subseq --gtf` accepts GTF 2.2 only | `gffread` to convert first |
 | k-mer counting and sketching | `jellyfish`, `sourmash`, `unikmer` |
-| Wrangling the TSV that `fx2tab` produces | `csvtk` |
+| Wrangling the TSV that `fx2tab` produces | `csvtk` — see the [csvtk skill](../../csvtk/SKILL.md) |
 | Splitting a sequence into N equal chunks | `kmcp utils split-genomes` |
 
 ## Notes on the near misses
@@ -36,5 +36,5 @@ only direction it goes.
 
 **`csvtk`** is the designated downstream partner — `fx2tab` deliberately stops
 where csvtk starts, and `seqkit stats --help` and `replace --help` both name it.
-A dedicated csvtk skill is planned; until it exists, `csvtk --help` is the
-starting point.
+See the [csvtk skill](../../csvtk/SKILL.md), which covers that handoff and the
+`fx2tab | csvtk` pipe.
