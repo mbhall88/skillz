@@ -1,0 +1,141 @@
+#!/usr/bin/env bash
+# skills-prune: list globally installed `npx skills` skills and pick ones to remove.
+#
+# Usage:
+#   skills-prune            interactive pick, then remove
+#   skills-prune --list     print the table and exit
+#   skills-prune --dry-run  pick, show the remove command, but don't run it
+#
+# Reads ~/.agents/.skill-lock.json (global installs only). A skill marked
+# "missing" is still in the lock file but no folder for it exists in
+# ~/.agents/skills or any agent's skills folder, so
+# `npx skills update` will reinstall it until it is removed here.
+set -euo pipefail
+
+LOCK="${HOME}/.agents/.skill-lock.json"
+SKILLS_DIR="${HOME}/.agents/skills"
+MODE="remove"
+
+case "${1:-}" in
+  "") ;;
+  -l|--list) MODE="list" ;;
+  -n|--dry-run) MODE="dry-run" ;;
+  -h|--help) awk 'NR > 1 && /^#/ { sub(/^# ?/, ""); print; next } NR > 1 { exit }' "$0"; exit 0 ;;
+  *) echo "unknown option: $1 (try --help)" >&2; exit 2 ;;
+esac
+
+[[ -f "$LOCK" ]] || { echo "No lock file at $LOCK: no global npx skills installed." >&2; exit 1; }
+command -v python3 >/dev/null || { echo "python3 is required." >&2; exit 1; }
+
+# Print one row per skill: name<TAB>status<TAB>source
+lock_rows() {
+  python3 - "$LOCK" "$SKILLS_DIR" <<'PY'
+import glob, json, os, sys
+lock_path, skills_dir = sys.argv[1], sys.argv[2]
+home = os.path.expanduser("~")
+# Multi-agent installs live in ~/.agents/skills; single-agent installs go
+# straight into that agent's folder (~/.claude/skills, ~/.config/<agent>/skills...).
+search_dirs = [skills_dir]
+search_dirs += glob.glob(os.path.join(home, ".*", "skills"))
+search_dirs += glob.glob(os.path.join(home, ".config", "*", "skills"))
+with open(lock_path) as fh:
+    skills = json.load(fh).get("skills", {})
+for name in sorted(skills, key=str.lower):
+    installed = any(os.path.isdir(os.path.join(d, name)) for d in search_dirs)
+    source = skills[name].get("source", "?")
+    print(f"{name}\t{'installed' if installed else 'missing'}\t{source}")
+PY
+}
+
+NAMES=(); STATUSES=(); SOURCES=()
+while IFS=$'\t' read -r name status source; do
+  NAMES+=("$name"); STATUSES+=("$status"); SOURCES+=("$source")
+done < <(lock_rows)
+
+if [[ ${#NAMES[@]} -eq 0 ]]; then
+  echo "The lock file lists no skills."
+  exit 0
+fi
+
+print_table() {
+  local i
+  for i in "${!NAMES[@]}"; do
+    printf '%3d  %-9s  %-32s  %s\n' "$((i + 1))" "${STATUSES[$i]}" "${NAMES[$i]}" "${SOURCES[$i]}"
+  done
+}
+
+if [[ "$MODE" == "list" ]]; then
+  print_table
+  exit 0
+fi
+
+PICKED=()
+
+pick_with_fzf() {
+  local line
+  while IFS= read -r line; do
+    if [[ -n "$line" ]]; then PICKED+=("$(awk '{print $3}' <<<"$line")"); fi
+  done < <(print_table | fzf --multi --reverse \
+    --header 'TAB to mark, ENTER to confirm, ESC to cancel' || true)
+}
+
+pick_with_prompt() {
+  local reply token i lo hi
+  print_table
+  echo
+  echo "Pick skills to remove: numbers or ranges (e.g. 1 4 7-9),"
+  echo "'missing' for every skill whose folder is gone, 'all', or blank to quit."
+  read -r -p "> " reply
+  for token in $reply; do
+    case "$token" in
+      missing)
+        for i in "${!NAMES[@]}"; do
+          if [[ "${STATUSES[$i]}" == "missing" ]]; then PICKED+=("${NAMES[$i]}"); fi
+        done ;;
+      all) PICKED+=("${NAMES[@]}") ;;
+      *-*)
+        lo="${token%-*}"; hi="${token#*-}"
+        [[ "$lo" =~ ^[0-9]+$ && "$hi" =~ ^[0-9]+$ ]] || { echo "bad range: $token" >&2; exit 2; }
+        for ((i = lo; i <= hi; i++)); do
+          (( i >= 1 && i <= ${#NAMES[@]} )) || { echo "out of range: $i" >&2; exit 2; }
+          PICKED+=("${NAMES[$((i - 1))]}")
+        done ;;
+      *)
+        [[ "$token" =~ ^[0-9]+$ ]] && (( token >= 1 && token <= ${#NAMES[@]} )) \
+          || { echo "not a valid choice: $token" >&2; exit 2; }
+        PICKED+=("${NAMES[$((token - 1))]}") ;;
+    esac
+  done
+}
+
+if command -v fzf >/dev/null && [[ -t 0 ]]; then
+  pick_with_fzf
+else
+  pick_with_prompt
+fi
+
+if [[ ${#PICKED[@]} -eq 0 ]]; then
+  echo "Nothing selected."
+  exit 0
+fi
+
+# Drop duplicates (e.g. "missing 3" where 3 is also missing), keep order.
+UNIQUE=()
+for name in "${PICKED[@]}"; do
+  case " ${UNIQUE[*]-} " in *" $name "*) ;; *) UNIQUE+=("$name") ;; esac
+done
+
+echo
+echo "Will remove ${#UNIQUE[@]} skill(s):"
+printf '  %s\n' "${UNIQUE[@]}"
+CMD=(npx -y skills@latest remove "${UNIQUE[@]}" -g -y)
+
+if [[ "$MODE" == "dry-run" ]]; then
+  echo
+  echo "Dry run. Would run: ${CMD[*]}"
+  exit 0
+fi
+
+read -r -p "Proceed? [y/N] " confirm
+[[ "$confirm" =~ ^[Yy]$ ]] || { echo "Cancelled."; exit 0; }
+"${CMD[@]}"

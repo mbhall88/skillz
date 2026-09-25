@@ -5,6 +5,13 @@ follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Added
+
+- `scripts/skills-prune`: lists globally installed `npx skills` skills, flags
+  lock-file entries whose folders were deleted by hand, and removes the ones
+  you pick through `npx skills remove`. Without that, `npx skills update`
+  reinstalls skills you deleted with `rm -rf`.
+
 ## [0.3.1] - 2026-09-25
 
 ### Changed

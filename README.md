@@ -16,6 +16,25 @@ one manually into an agent's skills directory, e.g. for Claude Code:
 ln -s /path/to/skillz/skills/<name> ~/.claude/skills/<name>
 ```
 
+## Uninstalling
+
+Remove skills with `npx skills remove`, not `rm -rf`. The CLI records every
+install in `~/.agents/.skill-lock.json`, and `npx skills update` reinstalls
+anything still listed there, including skills whose folders you deleted by hand.
+
+[`scripts/skills-prune`](./scripts/skills-prune) lists every globally installed
+skill, marks the ones whose folders are gone as `missing`, and lets you pick
+which to remove. It needs `bash` and `python3`, and uses `fzf` if it's installed.
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/mbhall88/skillz/main/scripts/skills-prune \
+  -o ~/bin/skills-prune && chmod +x ~/bin/skills-prune
+
+skills-prune --list      # show the table and exit
+skills-prune --dry-run   # pick, then print the remove command without running it
+skills-prune             # pick, confirm, remove
+```
+
 ## Skills
 
 - [`seqkit`](./skills/seqkit/README.md) — teaches an agent to reach for
