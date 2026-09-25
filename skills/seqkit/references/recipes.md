@@ -4,7 +4,7 @@ Compositions where the composition is the insight. A single command, or an
 obvious pipe between two, is not here — the routing table in `SKILL.md` already
 covers those.
 
-Verified against seqkit v2.13.0.
+Verified against seqkit v2.14.0.
 
 ## When no subcommand does it, round-trip through TSV
 
@@ -66,18 +66,30 @@ Matching by *sequence* rather than ID works but is dramatically slower:
 
 ## Take a fixed number of reads from a large FASTQ without loading it
 
-`sample --number` reads everything into memory. Sample generously by proportion,
-then truncate:
+On seqkit 2.13+ this is a single command, not a composition. It's exact and
+uniform, and it stores only N record indices:
+
+```bash
+seqkit sample2 --number 10000 --two-pass reads.fq.gz
+```
+
+Two-pass mode needs a file. For stdin, either save the stream to a file first
+or accept that `sample2 --number` without `--two-pass` holds every record in
+memory.
+
+On older installs, the usual composition is to sample generously by
+proportion and then truncate:
 
 ```bash
 seqkit sample --proportion 0.1 reads.fq.gz | seqkit head --number 10000
 ```
 
-The proportion must be large enough that the stream yields at least N records —
-this trades exactness for bounded memory. On seqkit 2.13+, prefer
-`seqkit sample2 --number 10000 --two-pass reads.fq.gz`, which is exact; the
-recipe above is the fallback for older installs and for streaming input that
-cannot be read twice.
+This keeps memory bounded, but **the result is biased toward the start of the
+file**: `head` keeps the first N sampled records, and records past that point
+are never reached. Pick a proportion just large enough to yield N, and don't
+use this where uniformity matters, such as subsampling for coverage estimates.
+Don't reach for `sample --number` instead: it is also non-uniform (see
+`traps.md`).
 
 ## Find records containing ambiguous or unexpected bases
 

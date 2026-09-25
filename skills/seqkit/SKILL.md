@@ -46,7 +46,9 @@ defaults unless the user asks.
 | Get per-record length, GC, name, or average quality as a table | `seqkit fx2tab` ⚠ |
 | Find records containing ambiguous or unexpected bases | `seqkit fx2tab --alphabet` ⚠ |
 | Get a per-sequence MD5 hash | `seqkit fx2tab --seq-hash` ⚠ |
-| Prove two files contain the same sequences, any order or strand | `seqkit sum` |
+| Tabulate several files at once, tagging each row with its source file (2.14+) | `seqkit fx2tab --file-name` ⚠ |
+| Prove two files contain the same sequences, any order or strand | `seqkit sum` ⚠ |
+| Prove two files contain the same records, IDs included (2.14+) | `seqkit sum --include-id` ⚠ |
 | Watch length/quality/GC distributions while a pipeline runs | `seqkit watch` |
 | Get BAM record statistics or histograms | `seqkit bam` |
 
@@ -126,6 +128,7 @@ defaults unless the user asks.
 | Want to... | Command |
 |---|---|
 | Rewrite headers with a regex | `seqkit replace` ⚠ |
+| Substitute, mask, or delete bases by regex (FASTQ from 2.14+) | `seqkit replace --by-seq` ⚠ |
 | Rewrite headers from a TSV lookup table | `seqkit replace --kv-file` ⚠ |
 | Number records sequentially, or stamp the filename into the header | `seqkit replace` with `{nr}` / `{fbne}` ⚠ |
 | Make duplicate IDs unique | `seqkit rename` ⚠ |
@@ -153,5 +156,5 @@ defaults unless the user asks.
 
 ---
 
-Verified against **seqkit v2.13.0**. If a command here is unknown to your
+Verified against **seqkit v2.14.0**. If a command here is unknown to your
 `seqkit`, it is older — check `seqkit version`.

@@ -4,7 +4,8 @@ Behaviours that produce plausible but **wrong** output, or that exhaust memory
 or time. Anything that fails loudly is deliberately excluded — the error message
 is enough.
 
-Every trap below was reproduced against seqkit v2.13.0.
+Every trap below was reproduced against seqkit v2.14.0. Traps that exist only
+in older releases say so, and were reproduced against v2.13.0.
 
 ## Cross-cutting
 
@@ -33,6 +34,15 @@ Write long flags. This table exists for *reading* commands you didn't write.
 | `-r` | `--non-deterministic` | `sample`, `sample2`, `shuffle` |
 | `-2` | `--two-pass` | `sort`, `shuffle`, `sample`, `sample2`, `split` |
 | `-2` | `--read2` | `split2`, `pair` |
+| `-f` | `--pattern-file` | `grep`, `locate`, `mutate` |
+| `-f` | `--file-name` | `fx2tab` (2.14+) |
+| `-f` | `--full-head` | `faidx` |
+| `-f` | `--only-flank` | `subseq` |
+| `-f` | `--force` | `convert`, `pair`, `rename`, `split`, `split2` |
+| `-i` | `--ignore-case` | `common`, `faidx`, `grep`, `locate`, `replace`, `rmdup`, `sort` |
+| `-i` | `--only-id` | `fx2tab`, `seq` |
+| `-i` | `--by-id` | `split` |
+| `-i` | `--include-id` | `sum` (2.14+) |
 
 The worst pair: `grep -p PATTERN` and `mutate -p` are unrelated — in `mutate`,
 `-p` is `--point` and the pattern flag is `-s`. A command transferred between
@@ -113,6 +123,19 @@ different questions. Do not mix them in one analysis.
 
 (The `fx2tab` denominator changed in v2.10.1. Numbers from older seqkit differ.)
 
+**`--header-line` has no column for `--file-name` (2.14+).** The file name is
+appended as the last column of every row, but the header line doesn't name it:
+
+```bash
+seqkit fx2tab --name --length --file-name --header-line a.fa
+# #name   length        <- 2 columns
+# x       4       a.fa  <- 3 columns
+```
+
+A header-aware parser either rejects the table or drops the file name. Omit
+`--header-line` and supply your own header, or append the missing name:
+`sed '1s/$/\tfile/'`.
+
 **Output always has three columns, even for FASTA** — ID, sequence, quality —
 with the quality column empty. Code that assumes two columns for FASTA and three
 for FASTQ will misparse.
@@ -184,6 +207,13 @@ leaving the first occurrence untouched. For actual renaming use `replace`.
 **With `--kv-file`, write `${1}` not `$1`.** The braced form is required for the
 capture group to be delimited correctly when followed by other characters.
 
+**On FASTQ, `--by-seq` keeps the original qualities for replaced bases (2.14+).**
+Masking `GT` to `NN` leaves the Ns with the Q scores of the bases they replaced,
+so a masked base can still read as Q40. A shorter replacement takes the
+quality of the first base in the match, and deletions drop their qualities.
+Replacements that lengthen a read are refused outright. Before 2.14, `--by-seq`
+refuses FASTQ entirely.
+
 `--key-capt-idx` selects *which* capture group is the lookup key, and defaults
 to 1. With a multi-group pattern, the default is often the wrong group and the
 lookup silently misses.
@@ -202,14 +232,21 @@ printf '>a\nAAAA\n>b\nTTTT\n' | seqkit rmdup --by-seq   # only >a survives
 
 ## sample / sample2
 
-**`sample --number` loads every record into memory.** On a large FASTQ this is
-fatal. seqkit's help recommends
-`seqkit sample --proportion 0.1 seqs.fq.gz | seqkit head --number N`.
+**`sample --number` is neither exact nor uniform.** It can return fewer than N
+records, and it favours records near the start of the file. Drawing 100 of
+1,000 records, the mean record index came out around 390–450 over several
+seeds, against 500 for a uniform draw. The last few hundred records are
+under-represented. seqkit's own help (2.14) now says it "is not uniform
+fixed-size sampling".
 
-**`sample2` is the better tool (2.13+)** but is not unconditional: its own help
-says `--number` "SHOULD BE coupled with 2-pass mode (`-2`) when large FASTQ
-files, otherwise it loads ALL seqs into memory". The bounded-memory claim
-applies to two-pass mode.
+**For an exact, uniform N, use `sample2 --number N` (2.13+).** Without
+`--two-pass` it loads every record into memory, which is fatal on a large
+FASTQ. With `--two-pass` it stores only N record indices, but it needs a file
+and can't read stdin. `sample --number` also loads every record without
+`--two-pass`.
+
+**`--proportion` never yields an exact count**, except with
+`sample2 --proportion p --two-pass`, which outputs exactly `floor(total * p)`.
 
 Output is **deterministic** by default given the same input and seed. For true
 randomness pass `--non-deterministic`.
@@ -219,7 +256,14 @@ randomness pass `--non-deterministic`.
 `--min-len`/`--max-len` measure the sequence **as stored**, gaps included. Strip
 gaps first with `--remove-gaps` if you mean ungapped length.
 
-`--line-width` applies to FASTA only; FASTQ output is always four lines.
+**Setting `--line-width` explicitly wraps FASTQ too (2.14+).** `--line-width 60`
+turns each FASTQ record into a multi-line record, wrapping sequence and quality
+alike. Many downstream tools expect four-line FASTQ; `seqkit sana` given wrapped
+FASTQ discards every record and still exits 0.
+The default (not passing the flag) and `--line-width 0` leave FASTQ unwrapped.
+`--help` still says the flag is for FASTA only; it is wrong. The flag is
+global, so this applies to every subcommand that writes fastx, not just `seq`.
+Before 2.14, FASTQ was never wrapped.
 
 ## shuffle / sort
 
@@ -254,6 +298,22 @@ seqkit seq --remove-gaps input.fa | seqkit stats --all
 ```
 
 **GC% is computed differently from `fx2tab --gc`.** See `fx2tab` above.
+
+**Before 2.14, L50 (`N50_num`) is wrong when contig lengths tie.** For contigs of
+10, 10, 10, and 2 bp, 2.13 reports L50 = 1; the correct value is 2. N50 itself
+is unaffected. On older installs, don't trust L50 from assemblies with many
+equal-length contigs.
+
+## sum
+
+**Before 2.14, `--rna2dna` is silently ignored.** An RNA file and its DNA
+equivalent get different digests, so the "are these the same?" check reports
+a false difference. On older installs, convert first:
+`seqkit seq --rna2dna in.fa | seqkit sum`.
+
+**IDs are ignored by default.** Two files with identical sequences under
+different IDs get the same digest. Pass `--include-id` (2.14+) if the IDs
+matter.
 
 ## subseq
 

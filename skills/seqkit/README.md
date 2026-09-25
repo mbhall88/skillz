@@ -51,8 +51,10 @@ flag that doesn't exist in any 2.x release. The skill carries only what
 
 ## Verification
 
-Every trap and recipe was reproduced against **seqkit v2.13.0** before being
-written down, including the full short-flag collision map. The version is
-pinned at the bottom of `SKILL.md`; commands added after it (`sample2`, the
-`seq --f-*` filters) carry a `(2.13+)` marker, because HPC module files often
-run years behind.
+Every trap and recipe was reproduced against **seqkit v2.14.0** before being
+written down, including the full short-flag collision map. Traps that apply
+only to older releases were reproduced against v2.13.0. The version is pinned
+at the bottom of `SKILL.md`. Recent additions carry a version marker, because
+HPC module files often run years behind: `(2.13+)` for `sample2` and the
+`seq --f-*` filters, `(2.14+)` for `sum --include-id`, `fx2tab --file-name`,
+and `replace --by-seq` on FASTQ.
